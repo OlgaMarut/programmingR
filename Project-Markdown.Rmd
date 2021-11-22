@@ -1,0 +1,245 @@
+---
+title: "Eurostat data visualisation"
+author: ""
+date: ""
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, include=FALSE}
+
+# libraries are added 
+
+library(readxl)
+library(rstudioapi)
+library(dplyr)
+library(ggplot2)
+library(knitr)
+```
+
+#
+#
+### Downloaded data:
+
+
+#### Previev of chosen dataset is shown below:
+#
+#
+```{r, echo=FALSE, fig.align='center'}
+
+kable(head(data1[, -c(1:2, length(data1))]))
+
+```
+
+## Visualistion of aggregated data on plots
+
+#### Mean values for chosen range of years and selected countries:
+
+```{r, include=FALSE}
+
+# preparing data to count statistics for plots
+
+# saving copy of data1
+
+data1_memory <<- data1
+
+# selecting countries chosen by user
+
+countries_selection <- function (selected = TRUE) {
+  
+  if (selected) {
+    
+    data1 <<- data1[data1[, 1] %in% countries_list, ]
+    
+  }
+  
+  else {
+    
+    try(data1 <<- data1_memory)
+  }
+  
+}
+
+
+# choosing years in dataset for selected countries
+
+countries_selection()
+
+temp_data <- gather(data1, key = "year", value = "value_country", as.character(year_min):as.character(year_max))
+
+temp_data_plot_mean <- temp_data %>%
+  group_by(year) %>%
+  summarise(Mean = mean(as.numeric(value_country), na.rm = TRUE))
+```
+
+
+```{r, echo = FALSE, fig.align='center', fig.height=8, fig.width=9}
+
+# selecting countries choosen by user for plot creation
+
+row_min <- 1 + year_min_chosen - year_min
+row_max <- row_min + year_max_chosen - year_min_chosen
+
+if (include_plot_mean) {
+
+  plot_title <<- paste(strwrap(paste("Mean value in years",as.character(year_min_chosen), "-", as.character(year_max_chosen), "in  countires:", toString(countries_list)), width = 120), collapse="\n")
+  
+  plot(x = c(year_min_chosen:year_max_chosen),
+       y=t(temp_data_plot_mean[row_min:row_max, 2]), 
+       type = "p", xlab = "year", ylab = "mean value")
+  
+  if (nchar(plot_title) <= 200) {
+    title(plot_title, line = 0.3, cex.main=1)
+  } else if ((nchar(plot_title) > 200) && (nchar(plot_title) <= 400)) 
+  {
+    title(plot_title, line = 0.3, cex.main=0.8) 
+  } else 
+  {
+    title(plot_title, line = 0, cex.main=0.7)
+  }
+  
+}
+
+```
+
+
+### Minimum nd maximum values in different regions of Europe:
+
+
+
+```{r, include=FALSE}
+
+temp_data_plot_min_max <- temp_data %>%
+  group_by(year, region) %>%
+  summarise(Min = min(as.numeric(value_country), na.rm = TRUE),
+            Max = max(as.numeric(value_country), na.rm = TRUE))
+
+```
+
+```{r, echo = FALSE, fig.align='center', fig.width=8, fig.height=5}
+
+if (include_plot_min_max) {
+  
+  ggplot(data = temp_data_plot_min_max) + 
+  ggtitle("Minimum and maximum values in each year") +
+  geom_line(aes(x=year, y=Min, group=region, colour=region), size = 1.1, linetype = "dashed") + 
+  geom_line(aes(x=year, y=Max, group=region, colour=region), size = 1.1) +
+  theme_minimal()
+}
+```
+
+
+
+## Statistical panel
+
+### Plots for chosen statistics by country or year:
+
+```{r, include=FALSE}
+
+# Variance in countries:
+
+if (statistics_group == "All") {
+  
+  data_statistics <<- data1_memory
+  
+  
+} else if (statistics_group == "Only selected ones") {
+  
+  data_statistics <<- data1
+  
+}
+
+data_statistics <- as.data.frame(data_statistics)
+
+names(data_statistics)[1] <- c("country")
+
+
+
+temp_data <<- gather(data_statistics, key = "year",
+                    value = "value_country",
+                    as.character(year_min):as.character(year_max))
+
+
+temp_data_plot_vc <- temp_data %>%
+  group_by(country, region) %>%
+  summarise(Var = var(as.numeric(value_country), na.rm = TRUE))
+
+# sorting countries in region order for visualization purposes
+
+temp_data_plot_vc <- temp_data_plot_vc[order(temp_data_plot_vc$region),]
+
+temp_data_plot_vy <- temp_data %>%
+  group_by(year) %>%
+  summarise(Var = var(as.numeric(value_country), na.rm = TRUE))
+
+temp_data_plot_mc <- temp_data %>%
+  group_by(country, region) %>%
+  summarise(Median = median(as.numeric(value_country), na.rm = TRUE))
+
+# sorting countries in region order for visualization purposes
+
+temp_data_plot_mc <- temp_data_plot_mc[order(temp_data_plot_mc$region),]
+
+temp_data_plot_my <- temp_data %>%
+  group_by(year) %>%
+  summarise(Median = median(as.numeric(value_country), na.rm = TRUE))
+
+```
+
+```{r, echo=FALSE, fig.align='center', fig.width=8, fig.height=5}
+
+
+if ("vc" %in% statistics_choice) {
+  
+# saving already achieved order
+  
+  temp_data_plot_vc$country <- factor(temp_data_plot_vc$country, levels = temp_data_plot_vc$country)
+  
+  ggplot(data = temp_data_plot_vc, aes(x=country, y=Var, fill = region)) + 
+    ggtitle("Variance of values in each country") +
+    geom_bar(stat = "identity") + 
+    theme_minimal() +
+    theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+    xlab('')
+
+  
+} 
+
+if ("mc" %in% statistics_choice) {
+  
+# saving already achieved order
+  
+  temp_data_plot_mc$country <- factor(temp_data_plot_mc$country, levels = temp_data_plot_mc$country)
+  
+  ggplot(data = temp_data_plot_mc, aes(x=country, y=Median, fill = region)) + 
+    ggtitle("Median of values in each country") +
+    geom_bar(stat = "identity") + 
+    theme_minimal() +
+    theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+    xlab('')
+  
+} 
+
+if ("vy" %in% statistics_choice) {
+  ggplot(data = temp_data_plot_vy, aes(x=year, y=Var)) + 
+    ggtitle("Variance of values in each year") +
+    geom_bar(stat = "identity", fill = "steelblue", color = "lightblue") + 
+    theme_minimal()
+} 
+
+if ("my" %in% statistics_choice) {
+  
+  ggplot(data = temp_data_plot_my, aes(x=year, y=Median)) +
+    ggtitle("Median of values in each year") +
+    geom_bar(stat = "identity", fill = "steelblue", color = "lightblue") + 
+    theme_minimal()
+}
+
+
+```
+
+
+
